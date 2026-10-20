@@ -1,0 +1,265 @@
+# Windows Flutter App Architecture — Certificate Printing Automation
+
+Good instinct on replacing Excel — Excel is a poor "database" (locking issues, no concurrent access, fragile parsing). Let's design a proper architecture.
+
+---
+
+## 1. Recommended Architecture (high level)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Flutter Windows App                      │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐   │
+│  │  Form Sync   │  │  Certificate │  │  Print / Export  │   │
+│  │  (Sheets)    │→ │  Generator   │→ │  (PDF / A4/A5)   │   │
+│  └──────────────┘  └──────────────┘  └──────────────────┘   │
+│         │                 │                    │            │
+│         ▼                 ▼                    ▼            │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │         Local SQLite (Drift)  +  File Storage        │   │
+│  └──────────────────────────────────────────────────────┘   │
+│         │                 │                    │            │
+└─────────┼─────────────────┼────────────────────┼────────────┘
+          ▼                 ▼                    ▼
+   Google Sheets API   Image Processor       PDF Renderer
+                       (remove.bg / local)   (pdf package)
+```
+
+**Key change vs. your current flow:** You **never open Photoshop**. Instead, you **compose the certificate in Dart** (as a PDF or image) using a pre-made template. This is what makes it fast and automatic.
+
+---
+
+## 2. Why to drop Photoshop
+
+Photoshop automation on Windows is possible (via COM + JSX scripting), but it's:
+
+- Slow (launching PS per certificate = 5–15 s each)
+- Fragile (PS updates break scripts)
+- Requires PS license per machine
+- Not parallelizable easily
+
+**Better:** You prepare **template files** (A4/A5, one per course) with empty placeholders once in Photoshop, export them as **PNG/PDF with transparent text boxes**, then overlay text via code.
+
+Two viable approaches:
+
+| Approach | Pros | Cons |
+|---|---|---|
+| **PDF template** (exported from PS as PDF with empty slots) + `pdf` package overlays text/images | Vector output, print-perfect, fast | Need to measure coordinates |
+| **PNG template** + `image` package draws text | Simple | Raster, fixed DPI |
+
+Recommend **PDF** — you get crisp A4/A5 print quality, and the `pdf` + `printing` Dart packages handle the printer dialog natively.
+
+---
+
+## 3. Component breakdown
+
+### 3.1 Google Sheets ingestion
+- Use **Google Sheets API v4** with a **Service Account** (JSON key bundled securely, or read from local config). Do **not** use OAuth per-user — service account is simpler for an internal tool.
+- Poll on demand (button "Sync submissions") or on a timer (every N minutes).
+- Track a `row_hash` or `last_synced_row` in local DB so you only ingest **new rows**, never duplicates.
+
+```
+GoogleSheetRows → diff against DB → insert new submissions → mark as "pending"
+```
+
+### 3.2 Local database (SQLite via `drift`)
+Replaces Excel. Schema:
+
+```sql
+courses(
+  id TEXT PRIMARY KEY,        -- "course_code"
+  name TEXT NOT NULL,
+  template_a4_path TEXT,
+  template_a5_path TEXT,
+  paper_size TEXT             -- 'A4' | 'A5'
+)
+
+submissions(
+  id INTEGER PRIMARY KEY,
+  sheet_row_hash TEXT UNIQUE, -- dedupe
+  surname TEXT,
+  name TEXT,
+  civil_number TEXT,
+  course_id TEXT REFERENCES courses(id),
+  portrait_path TEXT,         -- local path after download
+  portrait_processed_path TEXT,
+  status TEXT,                -- 'new' | 'ready' | 'printed' | 'error'
+  certificate_id TEXT,        -- generated, e.g. "CERT-2026-000123"
+  created_at INTEGER,
+  printed_at INTEGER
+)
+
+certificates(
+  id TEXT PRIMARY KEY,        -- certificate_id
+  submission_id INTEGER,
+  pdf_path TEXT,
+  paper_size TEXT,
+  generated_at INTEGER
+)
+
+settings(key TEXT PRIMARY KEY, value TEXT)
+```
+
+Drift gives you migrations, type-safe queries, and it's the standard Flutter choice.
+
+### 3.3 Certificate ID generation
+Don't use Excel for this. Use a **dedicated counter row in SQLite** inside a transaction:
+
+```dart
+certificateId = await db.transaction(() async {
+  final seq = await db.nextCertificateSequence(year: 2026);
+  return 'CERT-2026-${seq.toString().padLeft(6, "0")}';
+});
+```
+
+This is race-safe, unlike Excel.
+
+### 3.4 Portrait processing (background removal + lighting)
+Replace PS's subject-select + curves with:
+
+| Task | Option A (cloud) | Option B (local) |
+|---|---|---|
+| Background removal | **remove.bg API** (fast, very good) | **`rembg`** (Python, `u2net`) via a small helper exe, or **`backgroundremover`** |
+| Lighting fix | Simple: auto-levels / histogram equalization with `image` package | Same |
+
+For a certificate workflow I'd recommend **remove.bg API** for quality, with a local fallback (`rembg` wrapped as a bundled `.exe` called via `Process.run`) for offline mode.
+
+Lighting: apply a light **CLAHE** or simple auto-contrast in Dart using `image` package, or via ImageMagick (`magick convert` bundled). Keep it minimal — heavy retouching is overkill for certificates.
+
+Store both `original` and `processed` paths so you can re-run if needed.
+
+### 3.5 Certificate rendering (the Photoshop replacement)
+Use the **`pdf` Dart package** + **`printing`** package:
+
+```dart
+final doc = pw.Document();
+final templateBytes = File(templatePath).readAsBytesSync();
+
+doc.addPage(pw.Page(
+  pageFormat: paperSize,   // pdf.PageFormat.a4 / a5
+  build: (ctx) => pw.Stack(children: [
+    pw.Image(pw.MemoryImage(templateBytes), fit: pw.BoxFit.cover),
+    // text placeholders — coordinates come from course config
+    pw.Positioned(x: tpl.nameX, y: tpl.nameY,
+      child: pw.Text('${s.surname} ${s.name}', style: tpl.nameStyle)),
+    pw.Positioned(x: tpl.civilX, y: tpl.civilY,
+      child: pw.Text(s.civilNumber, style: tpl.civilStyle)),
+    pw.Positioned(x: tpl.photoX, y: tpl.photoY,
+      child: pw.Image(pw.MemoryImage(portraitBytes), width: tpl.photoW, height: tpl.photoH)),
+  ]),
+));
+```
+
+Store per-course template config (X/Y coordinates, font, size, color) in the `courses` table as JSON. You configure it **once per template** in a small admin screen — afterwards it's fully automatic.
+
+Then send to printer:
+
+```dart
+await Printing.layoutPdf(onLayout: (_) => doc.save());
+// or silent print to a named printer via Printing.directPrintPdf
+```
+
+### 3.6 Printing A4 vs A5
+Determined by `courses.paper_size`. The printer dialog defaults to it. For batch printing, group by paper size so you're not swapping trays per certificate — **queue all A4 jobs, then all A5 jobs**.
+
+---
+
+## 4. Project structure
+
+```
+lib/
+├── main.dart
+├── app/
+│   ├── router.dart
+│   └── theme.dart
+├── data/
+│   ├── db/
+│   │   ├── database.dart          # Drift
+│   │   └── tables.dart
+│   ├── sheets/
+│   │   └── sheets_service.dart    # Google Sheets API
+│   ├── storage/
+│   │   └── file_service.dart
+│   └── repos/
+│       ├── submission_repo.dart
+│       ├── course_repo.dart
+│       └── certificate_repo.dart
+├── features/
+│   ├── dashboard/                 # counters, sync button
+│   ├── submissions/               # list + preview
+│   ├── batch/                     # batch generate & print
+│   ├── templates/                 # per-course config editor
+│   └── settings/                  # API keys, printers, paths
+├── services/
+│   ├── certificate_id_service.dart
+│   ├── portrait_service.dart      # remove.bg / rembg
+│   ├── render_service.dart        # pdf generation
+│   └── print_service.dart
+└── models/
+```
+
+State management: **Riverpod** (fits well with Drift streams).
+
+---
+
+## 5. The new end-to-end flow
+
+1. **Form submitted** → row appears in Google Sheets.
+2. **App syncs** (button or auto every 5 min) → inserts into SQLite, status `new`.
+3. **Portrait fetch** (if uploaded to Drive) → download to `portraits/`, run background removal, save `portrait_processed_path`.
+4. **Operator clicks "Generate"** on one submission or "Generate all ready" → certificate ID issued, PDF rendered, status `ready`.
+5. **Operator clicks "Print batch"** → grouped by A4/A5, sends to printer via `Printing.directPrintPdf`.
+6. **Status → `printed`**, `printed_at` timestamp set.
+
+No Excel. No Photoshop. No per-certificate manual steps beyond review.
+
+---
+
+## 6. Batch UX suggestion (this is where the speed win is)
+
+Dashboard shows:
+- **New submissions** (needs portrait check)
+- **Ready to generate** (all data present)
+- **Ready to print** (PDFs generated)
+- **Printed today**
+- **Errors** (missing portrait, bad civil number format, etc.)
+
+Big buttons: `Sync Sheets` · `Generate All Ready` · `Print All (A4)` · `Print All (A5)`.
+
+With this flow, a batch of 100 certificates goes from *hours* of PS work to a few minutes.
+
+---
+
+## 7. Security & config notes
+
+- **Service account JSON**: store in Windows Credential Manager or a config file with restricted ACL — don't commit it.
+- **remove.bg key**: same.
+- **Civil registration number**: it's PII; keep DB encrypted if possible (`sqlcipher` via `sqlite3_flutter_libs` + password, or at minimum file ACL). Consider logging redaction.
+- **Backups**: scheduled copy of SQLite DB + `portraits/` folder.
+- **Google Forms file uploads** (portraits) land in a Drive folder — use the Drive API to fetch by filename pattern matching the submission.
+
+---
+
+## 8. Suggested build order
+
+1. SQLite schema + Drift setup, manual "add submission" form → verify ID generation.
+2. Google Sheets sync (service account + incremental insert).
+3. PDF render engine with **one** hardcoded template → get a clean A4 print.
+4. Template config UI (per course: paper size + placeholder coordinates).
+5. Portrait pipeline (download → background removal → store).
+6. Batch generate + batch print.
+7. Dashboard, error states, backup task.
+
+Ship after step 3 internally — it's already a massive improvement over the PS flow.
+
+---
+
+## TL;DR
+
+- **Replace Excel with SQLite (Drift)** — yes, do this.
+- **Replace Photoshop rendering with PDF templates + the `pdf` package** — this is the single biggest efficiency win.
+- **Replace PS background removal with remove.bg or `rembg`**.
+- **Add Google Sheets API sync with dedupe hashes**.
+- **Drive the whole thing from a dashboard with batch buttons**; per-course config (template file, paper size, placeholder coordinates) is set once and then never touched.
+
+The Photoshop step is the bottleneck — remove it and the rest of the pipeline becomes trivial automation.
