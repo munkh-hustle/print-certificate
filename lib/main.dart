@@ -1,16 +1,105 @@
 import 'package:flutter/material.dart';
 
+import 'app/router.dart';
+import 'app/theme.dart';
+import 'features/placeholder_pages.dart';
+
 void main() {
-  runApp(const MainApp());
+  runApp(const DisboxApp());
 }
 
-class MainApp extends StatelessWidget {
-  const MainApp({super.key});
+class DisboxApp extends StatelessWidget {
+  const DisboxApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
-      home: Scaffold(body: Center(child: Text('Hello World!'))),
+    return MaterialApp(
+      title: 'Disbox',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: ThemeMode.system,
+      home: const HomeShell(),
+      routes: {
+        // Deep-linkable named routes; the shell owns the rail state.
+        AppRoutes.dashboard: (_) => const HomeShell(initialTab: 0),
+        AppRoutes.submissions: (_) => const HomeShell(initialTab: 1),
+        AppRoutes.templates: (_) => const HomeShell(initialTab: 2),
+        AppRoutes.settings: (_) => const HomeShell(initialTab: 3),
+      },
+    );
+  }
+}
+
+/// Root shell: left-hand [NavigationRail] + the body of the active tab.
+class HomeShell extends StatefulWidget {
+  const HomeShell({super.key, this.initialTab = 0});
+
+  final int initialTab;
+
+  @override
+  State<HomeShell> createState() => _HomeShellState();
+}
+
+class _HomeShellState extends State<HomeShell> {
+  late int _selectedIndex = widget.initialTab;
+
+  static final List<RailDestination> _destinations = [
+    RailDestination(
+      label: 'Dashboard',
+      icon: Icons.space_dashboard_outlined,
+      selectedIcon: Icons.space_dashboard,
+      bodyBuilder: (_) => DashboardPage(),
+    ),
+    RailDestination(
+      label: 'Submissions',
+      icon: Icons.folder_outlined,
+      selectedIcon: Icons.folder,
+      bodyBuilder: (_) => SubmissionsPage(),
+    ),
+    RailDestination(
+      label: 'Templates',
+      icon: Icons.description_outlined,
+      selectedIcon: Icons.description,
+      bodyBuilder: (_) => TemplatesPage(),
+    ),
+    RailDestination(
+      label: 'Settings',
+      icon: Icons.settings_outlined,
+      selectedIcon: Icons.settings,
+      bodyBuilder: (_) => SettingsPage(),
+    ),
+  ];
+
+  void _onDestinationSelected(int index) {
+    setState(() => _selectedIndex = index);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final destination = _destinations[_selectedIndex];
+
+    return Scaffold(
+      appBar: AppBar(title: Text(destination.label)),
+      body: Row(
+        children: [
+          NavigationRail(
+            selectedIndex: _selectedIndex,
+            onDestinationSelected: _onDestinationSelected,
+            labelType: NavigationRailLabelType.all,
+            destinations: [
+              for (final d in _destinations)
+                NavigationRailDestination(
+                  icon: Icon(d.icon),
+                  selectedIcon: Icon(d.selectedIcon),
+                  label: Text(d.label),
+                ),
+            ],
+          ),
+          const VerticalDivider(thickness: 1, width: 1),
+          Expanded(child: Builder(builder: destination.bodyBuilder)),
+        ],
+      ),
     );
   }
 }
