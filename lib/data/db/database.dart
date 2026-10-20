@@ -107,8 +107,8 @@ class AppDatabase extends _$AppDatabase {
       final nextSeq = (row?.lastSeq ?? 0) + 1;
 
       await into(certificateCounter).insertOnConflictUpdate(
-        CertificateCounterCompanion.insert(
-          year: year,
+        CertificateCounterCompanion(
+          year: Value(year),
           lastSeq: Value(nextSeq),
         ),
       );
