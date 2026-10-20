@@ -2,7 +2,7 @@ import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 
 import 'package:disbox/data/db/database.dart';
-import 'package:disbox/data/db/tables.dart';
+
 
 /// Standalone verification for Step 2 (run with the bundled dart-sdk after
 /// build_runner has generated database.g.dart):

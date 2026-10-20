@@ -85,11 +85,11 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<bool> submissionHashExists(String hash) async {
-    final exists = (selectOnly(submissions)
+    final row = await (selectOnly(submissions)
           ..addColumns([submissions.id])
           ..where(submissions.sheetRowHash.equals(hash)))
-        .isPresent();
-    return exists;
+        .getSingleOrNull();
+    return row != null;
   }
 
   // ---------------------------------------------------------------------
