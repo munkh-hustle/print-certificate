@@ -1,0 +1,9 @@
+flutter config --enable-windows-desktop
+flutter create --platforms=windows .
+flutter pub add drift drift_flutter sqlite3_flutter_libs path_provider path
+flutter pub add -d drift_dev build_runner
+flutter pub add flutter_riverpod
+flutter pub add googleapis googleapis_auth http
+flutter pub add pdf printing
+flutter pub add image
+flutter pub add uuid intl

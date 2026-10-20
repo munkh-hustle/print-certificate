@@ -1,0 +1,219 @@
+# Build Order — Start Here
+
+You're at the blank `main.dart`. That's actually the perfect starting point. Here's a **step-by-step order** that always keeps the app runnable, so you can verify progress at each step.
+
+---
+
+## Step 0 — Project setup (15 min, do once)
+
+From your Flutter project root:
+
+```bash
+flutter config --enable-windows-desktop
+flutter create --platforms=windows .
+flutter pub add drift drift_flutter sqlite3_flutter_libs path_provider path
+flutter pub add -d drift_dev build_runner
+flutter pub add flutter_riverpod
+flutter pub add googleapis googleapis_auth http
+flutter pub add pdf printing
+flutter pub add image
+flutter pub add uuid intl
+```
+
+Run `flutter run -d windows` once to confirm the toolchain works before writing code.
+
+---
+
+## Step 1 — App shell + navigation (do this first)
+
+Get the skeleton running so you have a place to put everything else.
+
+**What to build:**
+- `lib/app/theme.dart` — a dark/light `ThemeData`
+- `lib/app/router.dart` — simple `Navigator` with named routes or `go_router` (optional)
+- Replace `main.dart` with a `MaterialApp` that shows a `NavigationRail` on the left with 4 tabs:
+  - **Dashboard**
+  - **Submissions**
+  - **Templates**
+  - **Settings**
+
+Each tab is a placeholder `StatelessWidget` for now returning `Center(Text('Dashboard'))`, etc.
+
+**Verify:** `flutter run -d windows` → you see the rail + empty pages. ✅
+
+---
+
+## Step 2 — Local database (Drift) with schema
+
+This is the foundation. Don't skip ahead.
+
+**What to build:**
+- `lib/data/db/tables.dart` — Drift table definitions:
+  - `Courses` (id, name, paperSize, templatePath, templateConfigJson)
+  - `Submissions` (id, sheetRowHash, surname, name, civilNumber, courseId, portraitPath, portraitProcessedPath, status, certificateId, createdAt, printedAt)
+  - `Certificates` (id, submissionId, pdfPath, paperSize, generatedAt)
+  - `Settings` (key, value)
+- `lib/data/db/database.dart` — `@DriftDatabase` class, `NativeDatabase` in `path_provider`'s app support dir
+- `dart run build_runner build --delete-conflicting-outputs`
+
+**Verify:** open the DB file with any SQLite viewer, run app, see tables created. ✅
+
+**Good moment to commit.** `git init` if you haven't.
+
+---
+
+## Step 3 — Settings screen (real, working)
+
+You need a place to enter config before anything else can run.
+
+**What to build:**
+- Settings screen with 3 text fields, persisted via the `Settings` table:
+  - Google Service Account JSON path (or paste the JSON into a textarea)
+  - Google Sheet ID
+  - remove.bg API key (optional — placeholder for later)
+
+**Verify:** enter values, restart app, they're still there. ✅
+
+---
+
+## Step 4 — Submissions screen with manual "Add" (temporary)
+
+Before touching Google Sheets, prove the pipeline works end-to-end with **fake data**.
+
+**What to build:**
+- Submissions list (Drift stream → `ListView`)
+- Floating "Add submission" button → dialog with surname, name, civil number, course dropdown
+- Certificate ID generator in `lib/services/certificate_id_service.dart` using a settings counter (`CERT-2026-000001`)
+
+**Verify:** add 3 fake submissions, see them in the list with generated IDs. ✅
+
+This proves your DB layer + UI wiring before the harder network parts.
+
+---
+
+## Step 5 — Template config screen (Photoshop replacement prep)
+
+You need one A4 template and one A5 template to move forward. Design them in Photoshop **once**, export as **PDF**, drop into `assets/templates/`.
+
+**What to build:**
+- `Courses` management UI: add course → pick A4 or A5 → pick template file (file picker)
+- A **template editor screen**: show the PDF/image preview, let the user click to place three markers:
+  - name position (x, y, size, color)
+  - civil number position
+  - portrait position + size
+- Save as JSON into `Courses.templateConfigJson`
+
+**Verify:** configure one course, save, reopen, markers are in the right place. ✅
+
+This is the most fiddly step — budget an evening for it. But it's a **one-time cost per template**, then never touched again.
+
+---
+
+## Step 6 — PDF render + preview (the big win)
+
+**What to build:**
+- `lib/services/render_service.dart` — takes a `Submission` + `Course`, loads template PDF, overlays text using stored coordinates, returns `Uint8List`
+- In Submissions screen: "Preview" button → render → open in a `printing` package preview or save to temp and open with system viewer
+- **Hardcode portrait absence for now** (skip the photo overlay; test text only)
+
+**Verify:** click Preview on a fake submission → see a properly rendered PDF with the name and civil number in the right place on the A4 template. ✅
+
+**Commit here.** This is the first real "wow" moment — you no longer need Photoshop for the certificate body.
+
+---
+
+## Step 7 — Print to a real printer
+
+**What to build:**
+- "Print" button per submission → `Printing.directPrintPdf` to the default printer
+- For A5 courses, ensure `pageFormat` matches — the `Printing` package reads page size from the PDF
+
+**Verify:** print one certificate to a real printer. Check margins and alignment against the physical template. ✅
+
+---
+
+## Step 8 — Google Sheets sync
+
+Now that the core works with fake data, wire the real source.
+
+**What to build:**
+- `lib/data/sheets/sheets_service.dart`:
+  - Read the service account JSON
+  - Get access token via `googleapis_auth`
+  - Fetch sheet rows via `sheets_v4.Sheets`
+  - Map each row → `Submission`, compute `sheetRowHash` (e.g., hash of surname|name|civil|course|timestamp), skip duplicates
+- Dashboard gets a big **"Sync Sheets"** button
+- Sync inserts new rows with status `new`
+
+**Verify:** submit a test Google Form, hit Sync, new row appears in Submissions. ✅
+
+---
+
+## Step 9 — Batch generate + batch print
+
+This is where the time savings really land.
+
+**What to build:**
+- Dashboard buttons:
+  - "Generate All Ready" → loop over status `new`, render PDFs, status → `ready`
+  - "Print All A4" / "Print All A5" → group by paper size, send to printer in one job with `Printing.layoutPdf` (one job = one dialog, much faster than per-file)
+- Progress indicator + error list
+
+**Verify:** add 10 fake submissions, one click → 10 PDFs generated, one click → all printed in one batch. ✅
+
+---
+
+## Step 10 — Portrait pipeline
+
+Now add the photo piece.
+
+**What to build:**
+- Drive download (if portraits come from Google Forms uploads): find file by name pattern, download to `portraits/`
+- `portrait_service.dart`:
+  - Call remove.bg API (or bundle `rembg.exe` as fallback)
+  - Save processed PNG
+- Render service: overlay processed portrait at the config coordinates
+- UI: portrait preview thumbnail in the submission row, "Process portrait" button
+
+**Verify:** one submission with a portrait → background removed, appears in the PDF preview. ✅
+
+---
+
+## Step 11 — Polish
+
+- Error states everywhere (missing template, bad photo, network fail)
+- "Printed" filter / history view
+- Scheduled background sync (every 5 min via a `Timer`)
+- Backup button: copy `app.db` + `portraits/` to a timestamped folder
+- PII: redact civil number in logs; consider SQLCipher later
+
+---
+
+## Suggested commit checkpoints
+
+| After step | Commit message |
+|---|---|
+| 1 | `app shell with nav rail` |
+| 2 | `drift schema + migrations` |
+| 3 | `settings screen persisted to db` |
+| 4 | `manual submissions + cert ID generator` |
+| 5 | `template config editor` |
+| 6 | `pdf render + preview` ← **milestone** |
+| 7 | `direct print working` |
+| 8 | `google sheets sync` |
+| 9 | `batch generate + print` |
+| 10 | `portrait pipeline` |
+
+---
+
+## What to do RIGHT NOW
+
+Three concrete actions, in order:
+
+1. **Run the `flutter pub add` block in Step 0** and confirm `flutter run -d windows` still launches your Hello World.
+2. **Replace `main.dart` with the Step 1 app shell** — `MaterialApp` + `NavigationRail` + 4 placeholder pages. Don't add any business logic yet.
+3. **Start Step 2** — write `tables.dart` and `database.dart`, run `build_runner`, and open the created `.db` file in DB Browser for SQLite to confirm the tables exist.
+
+That's your session. Come back with the shell + empty DB working and we'll do the Settings screen next.
+
+**Rule of thumb:** never start a step until the previous step's "Verify" line passes. The temptation will be to jump to Google Sheets or the PDF renderer early — resist it. Every shortcut there costs you a day of debugging later.
