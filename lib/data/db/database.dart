@@ -24,15 +24,11 @@ class AppDatabase extends _$AppDatabase {
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) async {
           await m.createAll();
-          // certificate_counter.last_seq: NOT NULL DEFAULT 0 (kept out of the
-          // table definition so the generated insert companion takes a plain
-          // int for lastSeq — see note in tables.dart).
-          await customStatement(
-            'UPDATE sqlite_master SET sql = '
-            "REPLACE(sql, '\"last_seq\" INTEGER NOT NULL', "
-            "'\"last_seq\" INTEGER NOT NULL DEFAULT 0') "
-            "WHERE type = 'table' AND name = 'certificate_counter'",
-          );
+          // NOTE: the old workaround here rewrote sqlite_master via UPDATE to
+          // inject `DEFAULT 0` into certificate_counter.last_seq. SQLite
+          // forbids that ("table sqlite_master may not be modified"), so the
+          // default is now declared in tables.dart with
+          // `.withDefault(const Constant(0))` and CREATE TABLE emits it.
           // Extra indices Drift cannot express declaratively on columns.
           await customStatement(
             // Lists are filtered by status constantly.

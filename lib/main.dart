@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/router.dart';
 import 'app/theme.dart';
 import 'features/placeholder_pages.dart';
+import 'features/settings/settings_screen.dart';
 
 void main() {
-  runApp(const DisboxApp());
+  runApp(const ProviderScope(child: DisboxApp()));
 }
 
 class DisboxApp extends StatelessWidget {
@@ -67,7 +69,7 @@ class _HomeShellState extends State<HomeShell> {
       label: 'Settings',
       icon: Icons.settings_outlined,
       selectedIcon: Icons.settings,
-      bodyBuilder: (_) => SettingsPage(),
+      bodyBuilder: (_) => const SettingsScreen(),
     ),
   ];
 

@@ -144,12 +144,13 @@ class CertificateCounter extends Table {
   /// e.g. 2026.
   IntColumn get year => integer()();
 
-  /// NOT NULL, default 0. No `.withDefault()` here: that would make the
-  /// generated insert companion expect `Value<int>` instead of plain `int`,
-  /// breaking the required `CertificateCounterCompanion.insert(year:, lastSeq:)`
-  /// call shape in database.dart. The SQL default is applied explicitly in
-  /// AppDatabase's onCreate migration instead.
-  IntColumn get lastSeq => integer()();
+  /// NOT NULL DEFAULT 0. Declared via `.withDefault()` so Drift emits the
+  /// DEFAULT clause in CREATE TABLE. (The previous workaround Ñ rewriting
+  /// sqlite_master with an UPDATE statement inside onCreate Ñ is illegal in
+  /// SQLite: "table sqlite_master may not be modified".) Callers using the
+  /// default companion with `Value<int>` fields (see nextCertificateId) are
+  /// unaffected by this change.
+  IntColumn get lastSeq => integer().withDefault(const Constant(0))();
 
   @override
   Set<Column> get primaryKey => {year};
