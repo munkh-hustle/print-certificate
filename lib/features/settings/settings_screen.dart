@@ -33,10 +33,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   bool _loading = true;
   bool _saving = false;
-  // Held so the repo (and its DB) is never torn down while this screen edits
-  // settings — an unlistened non-autoDispose provider would be disposed as
-  // soon as other tabs stop watching it. Released in dispose().
-  ProviderSubscription<Object?>? _keepAliveSub;
   bool _obscureRemoveBg = true;
 
   /// Last successfully loaded/saved snapshot, used by "Revert".
@@ -47,8 +43,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _keepAliveSub = ref.listenSelf((_, __) {});
-    _load();
+    // Load asynchronously AFTER the first frame: calling ref.read() directly
+    // inside initState() can throw if a rebuild is in flight ("Tried to modify
+    // a provider while building"). The post-frame callback guarantees we run
+    // safely outside the build phase.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
   @override
@@ -56,7 +55,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _saJsonController.dispose();
     _sheetIdController.dispose();
     _removeBgController.dispose();
-    _keepAliveSub?.close();
     super.dispose();
   }
 
