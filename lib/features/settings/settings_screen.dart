@@ -96,7 +96,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       sheetId: _savedSheetId,
       removeBg: _savedRemoveBg,
     );
-    _formKey.currentState?.clear(); // drop stale validation errors
+    _formKey.currentState?.reset(); // drop stale validation errors
     setState(() {});
   }
 
