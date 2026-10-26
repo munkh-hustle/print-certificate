@@ -145,8 +145,8 @@ class CertificateCounter extends Table {
   IntColumn get year => integer()();
 
   /// NOT NULL DEFAULT 0. Declared via `.withDefault()` so Drift emits the
-  /// DEFAULT clause in CREATE TABLE. (The previous workaround Ñ rewriting
-  /// sqlite_master with an UPDATE statement inside onCreate Ñ is illegal in
+  /// DEFAULT clause in CREATE TABLE. (The previous workaround ï¿½ rewriting
+  /// sqlite_master with an UPDATE statement inside onCreate ï¿½ is illegal in
   /// SQLite: "table sqlite_master may not be modified".) Callers using the
   /// default companion with `Value<int>` fields (see nextCertificateId) are
   /// unaffected by this change.
