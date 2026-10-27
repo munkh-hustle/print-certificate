@@ -5,7 +5,19 @@ import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'seeds.dart';
 import 'tables.dart';
+
+/// Stable course id derived from a name: lowercase, whitespace/punctuation →
+/// `_`, Cyrillic kept as-is. Collapsing runs of `_` keeps ids readable and the
+/// trailing trim avoids ids like `barist_`.
+String _courseIdFromName(String name) => name
+    .toLowerCase()
+    .replaceAll(RegExp(r'[^a-z0-9\u0400-\u04FF]+'), '_')
+    .replaceAll(RegExp(r'^_+|_+$'), '');
+
+// DEBT(Step 2): schemaVersion/onUpgrade and missing FKs are known Step 2 debt;
+// left untouched here on purpose (Step 5 only adds helpers + seeding).
 
 part 'database.g.dart';
 
@@ -51,8 +63,67 @@ class AppDatabase extends _$AppDatabase {
             'CREATE UNIQUE INDEX IF NOT EXISTS idx_submissions_sheet_row_hash '
             'ON submissions (sheet_row_hash)',
           );
+          // Step 5: seed default course list (idempotent — safe to leave here).
+          await _seedCoursesIfEmpty();
         },
       );
+
+  // -------------------------------------------------------------------------
+  // Course helpers (Step 5)
+  // -------------------------------------------------------------------------
+
+  /// Streams all courses, newest first — backs `coursesListProvider`.
+  Stream<List<Course>> watchCourses() {
+    final query = select(courses)
+      ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]);
+    return query.watch();
+  }
+
+  /// Updates a course's template configuration. Null arguments leave the
+  /// corresponding column unchanged (only [paperSize] is non-nullable).
+  Future<int> updateCourse(
+    String id, {
+    String? name,
+    String? paperSize,
+    String? templatePath,
+    String? templateConfigJson,
+  }) {
+    return (update(courses)..where((t) => t.id.equals(id))).write(
+      CoursesCompanion(
+        name: name != null ? Value(name) : const Value.absent(),
+        paperSize: paperSize != null ? Value(paperSize) : const Value.absent(),
+        // Explicit Value(null) → sets the column back to NULL (absent would
+        // keep the old path), which is what "clear template file" means.
+        templatePath:
+            templatePath != null ? Value(templatePath) : const Value(null),
+        templateConfigJson: templateConfigJson != null
+            ? Value(templateConfigJson)
+            : const Value(null),
+      ),
+    );
+  }
+
+  /// Inserts the default course list if the table is empty (idempotent).
+  ///
+  /// Called from `onCreate`; safe to call again later — it no-ops whenever any
+  /// course row exists. Ids are stable slugs of the names so re-seeding across
+  /// machines yields identical keys.
+  Future<void> _seedCoursesIfEmpty() async {
+    final existing = await select(courses).get();
+    if (existing.isNotEmpty) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    var ts = now;
+    await batch((b) {
+      for (final name in kSeedCourseNames) {
+        b.insert(courses, CoursesCompanion.insert(
+              id: _courseIdFromName(name),
+              name: name,
+              paperSize: 'A4',
+              createdAt: ++ts, // keeps rows distinct + newest-last ordering
+            ));
+      }
+    });
+  }
 
   static QueryExecutor _openConnection() {
     // Lazy so the default constructor works without an already-resolved

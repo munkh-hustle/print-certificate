@@ -2,11 +2,13 @@ import 'dart:io';
 import 'dart:ui' show Offset, Size;
 
 import 'package:file_picker/file_picker.dart';
+// ignore: unnecessary_import — required for the `FilePicker.platform` getter.
+import 'package:file_picker/platform/file_picker.dart';
 import 'package:flutter/foundation.dart' show Uint8List;
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:pdf/pdf.dart' show PdfColors, PdfPageFormat;
+import 'package:pdf/pdf.dart' show PdfColor, PdfColors, PdfPageFormat;
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart' show PdfRaster, Printing;
 
@@ -44,9 +46,6 @@ class TemplatePreview {
 
   bool get isPdf => kind == TemplateFileKind.pdf;
 
-  /// DPI the preview is rasterized at (kept modest: fast, still readable).
-  static const double pixelDpi = 150;
-
   /// Converts a position inside the displayed preview (logical px) into PDF
   /// points with a top-left origin — the coordinate space of the JSON schema.
   Offset pointFromPreview(Offset previewLocal, Size previewSize) => Offset(
@@ -65,6 +64,9 @@ class TemplatePreview {
 }
 
 enum TemplateFileKind { pdf, image }
+
+/// DPI the preview is rasterized at (kept modest: fast, still readable).
+const double kPreviewPixelDpi = 150;
 
 TemplateFileKind? templateKindFor(String path) {
   final ext = p.extension(path).toLowerCase();
@@ -97,6 +99,9 @@ Future<Directory> _templatesDir() async {
 /// Returns the absolute path the user picked, or null when cancelled.
 Future<String?> pickTemplateFile(BuildContext context) async {
   try {
+    // `FilePicker.platform` lives in the `file_picker/platform/` part of the
+    // library, which is NOT exported by the main barrel file — it must be
+    // imported explicitly.
     final result = await FilePicker.platform.pickFiles(
       dialogTitle: 'Choose a certificate template (PDF or image)',
       type: FileType.custom,
@@ -182,8 +187,8 @@ Future<TemplatePreview> loadTemplatePreview(
 
   List<PdfRaster> rasters;
   try {
-    rasters =
-        await Printing.raster(bytes, pages: const [0], dpi: pixelDpi).toList();
+    rasters = await Printing.raster(bytes,
+        pages: const [0], dpi: kPreviewPixelDpi.toInt()).toList();
   } catch (e) {
     throw TemplateLoadException('Could not render the PDF template:\n$e');
   }
@@ -196,8 +201,8 @@ Future<TemplatePreview> loadTemplatePreview(
   final png = await raster.toPng();
   return TemplatePreview(
     imageBytes: png,
-    pageWidthPt: raster.pixelWidth * 72.0 / pixelDpi,
-    pageHeightPt: raster.pixelHeight * 72.0 / pixelDpi,
+    pageWidthPt: raster.width * 72.0 / kPreviewPixelDpi,
+    pageHeightPt: raster.height * 72.0 / kPreviewPixelDpi,
     sourcePath: path,
     kind: kind,
   );
@@ -222,8 +227,8 @@ Future<Uint8List> renderBlankPage({
             mainAxisSize: pw.MainAxisSize.min,
             children: [
               pw.Text(label,
-                  style: const pw.TextStyle(
-                      fontSize: 22, color: PdfColors.grey4)),
+                  style: pw.TextStyle(
+                      fontSize: 22, color: PdfColor.fromInt(0xFF888888))),
               pw.SizedBox(height: 10),
               pw.Text('No template file selected',
                   style:
@@ -235,7 +240,7 @@ Future<Uint8List> renderBlankPage({
     ),
   );
   final bytes = await doc.save();
-  final rasters =
-      await Printing.raster(bytes, pages: const [0], dpi: pixelDpi).toList();
+  final rasters = await Printing.raster(bytes,
+      pages: const [0], dpi: kPreviewPixelDpi.toInt()).toList();
   return rasters.first.toPng();
 }
