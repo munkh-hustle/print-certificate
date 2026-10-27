@@ -14,14 +14,10 @@ class DashboardPage extends StatelessWidget {
   }
 }
 
-class TemplatesPage extends StatelessWidget {
-  const TemplatesPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(child: Text('Templates'));
-  }
-}
+// NOTE(Step 5): TemplatesPage was the Step 1 placeholder for the Courses /
+// template tab. It has been replaced by the real `CoursesListPage`
+// (lib/features/courses/courses_list_page.dart), which is now hosted directly
+// in the shell's "Templates" rail destination — this class no longer exists.
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});

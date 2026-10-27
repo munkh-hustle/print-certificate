@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/router.dart';
 import 'app/theme.dart';
+import 'features/courses/courses_list_page.dart';
 import 'features/placeholder_pages.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/submissions/submissions_page.dart';
@@ -64,7 +65,8 @@ class _HomeShellState extends State<HomeShell> {
       label: 'Templates',
       icon: Icons.description_outlined,
       selectedIcon: Icons.description,
-      bodyBuilder: (_) => TemplatesPage(),
+      // Step 5: real Courses management page (was the TemplatesPage placeholder).
+      bodyBuilder: (_) => const CoursesListPage(),
     ),
     RailDestination(
       label: 'Settings',
