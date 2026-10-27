@@ -191,11 +191,11 @@ class _CoursesListPageState extends ConsumerState<CoursesListPage> {
             );
           }
 
+          final query = _query.toLowerCase();
           final filtered = _query.isEmpty
               ? courses
               : courses
-                  .where((c) =>
-                      c.name.contains(_query, caseSensitive: false))
+                  .where((c) => c.name.toLowerCase().contains(query))
                   .toList();
 
           if (filtered.isEmpty) {
