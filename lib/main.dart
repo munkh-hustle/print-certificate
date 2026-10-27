@@ -5,6 +5,7 @@ import 'app/router.dart';
 import 'app/theme.dart';
 import 'features/placeholder_pages.dart';
 import 'features/settings/settings_screen.dart';
+import 'features/submissions/submissions_page.dart';
 
 void main() {
   runApp(const ProviderScope(child: DisboxApp()));
@@ -57,7 +58,7 @@ class _HomeShellState extends State<HomeShell> {
       label: 'Submissions',
       icon: Icons.folder_outlined,
       selectedIcon: Icons.folder,
-      bodyBuilder: (_) => SubmissionsPage(),
+      bodyBuilder: (_) => const SubmissionsPage(),
     ),
     RailDestination(
       label: 'Templates',
