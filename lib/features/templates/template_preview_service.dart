@@ -1,9 +1,10 @@
 import 'dart:io';
-import 'dart:ui' show Offset, Size;
+
+// Offset/Size via painting.dart, NOT dart:ui — importing dart:ui directly in a
+// file that also imports material.dart makes Color/Offset ambiguous.
+import 'package:flutter/painting.dart' show Offset, Size;
 
 import 'package:file_picker/file_picker.dart';
-// ignore: unnecessary_import — required for the `FilePicker.platform` getter.
-import 'package:file_picker/platform/file_picker.dart';
 import 'package:flutter/foundation.dart' show Uint8List;
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
@@ -99,15 +100,18 @@ Future<Directory> _templatesDir() async {
 /// Returns the absolute path the user picked, or null when cancelled.
 Future<String?> pickTemplateFile(BuildContext context) async {
   try {
-    // `FilePicker.platform` lives in the `file_picker/platform/` part of the
-    // library, which is NOT exported by the main barrel file — it must be
-    // imported explicitly.
-    final result = await FilePicker.platform.pickFiles(
+    // file_picker 13.x API change: the old `FilePicker.platform` singleton and
+    // its `FilePickerResult` wrapper are gone. `FilePicker` now exposes static
+    // methods directly, and `pickFiles` returns a plain `List<PlatformFile>`
+    // (empty list == user cancelled). See
+    // https://pub.dev/documentation/file_picker/latest/file_picker/FilePicker-class.html
+    final files = await FilePicker.pickFiles(
       dialogTitle: 'Choose a certificate template (PDF or image)',
       type: FileType.custom,
       allowedExtensions: const ['pdf', 'png', 'jpg', 'jpeg', 'webp', 'bmp'],
     );
-    final path = result?.files.single.path;
+    if (files.isEmpty) return null;
+    final path = files.single.path;
     if (path == null) return null;
     if (templateKindFor(path) == null) {
       _notify(context, 'Unsupported template file type: ${p.extension(path)}');
