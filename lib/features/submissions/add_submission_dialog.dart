@@ -1,8 +1,14 @@
-// NOTE ON IMPORTS: `Value` / `Value.absent()` (Drift companions) and
-// `SqliteException` must be imported explicitly here. `data/db/database.dart`
-// only imports drift internally, so without this line analysis fails with
-// "Undefined name 'Value'" and "The name 'SqliteException' isn't a type".
-import 'package:drift/drift.dart' show Value, SqliteException;
+// NOTE ON IMPORTS: `Value` / `Value.absent()` (Drift companions) must be
+// imported explicitly here; `data/db/database.dart` only imports drift
+// internally, so without this line analysis fails with "Undefined name 'Value'".
+//
+// Do NOT try to import `SqliteException` from `package:drift/drift.dart` —
+// drift does not export it, which is what produced
+// "The name 'SqliteException' isn't a type" in the on-catch clause below.
+// Instead we catch broadly and detect SQLite errors by their message text
+// (see `_save`). If you later add `sqlite3:` as a direct dependency in
+// pubspec.yaml, you may narrow this back to `on SqliteException`.
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -111,26 +117,27 @@ class _AddSubmissionDialogState extends ConsumerState<AddSubmissionDialog> {
       // Guard against the dialog being dismissed while we awaited the DB.
       if (!mounted) return;
       Navigator.of(context).pop(true);
-    } on SqliteException catch (e) {
-      // Most likely a UNIQUE constraint hit on sheet_row_hash (shouldn't
-      // happen with UUIDs, but surface it readably rather than crashing).
-      // DEBT(Step 2): submissions.sheet_row_hash carries both a column-level
-      // UNIQUE constraint and a separately created unique index; not fixed
-      // here on purpose.
-      // NOTE: no `isConstraintFailure` check — that getter does not exist on
-      // this sqlite3 version's SqliteException; we match the message instead.
-      if (mounted) {
-        setState(() => _saving = false);
-        final isUniqueViolation =
-            e.message.contains('UNIQUE constraint failed');
-        _showError(isUniqueViolation
-            ? 'This submission already exists (duplicate row hash).'
-            : 'Database error while saving: ${e.message}');
-      }
     } catch (e) {
+      // NOTE: this is a broad catch on purpose — `SqliteException` is NOT
+      // exported by `package:drift/drift.dart`, so `on SqliteException`
+      // fails analysis unless `sqlite3:` becomes a direct dependency.
+      // We detect SQLite/Drift errors via their message text instead.
       if (mounted) {
         setState(() => _saving = false);
-        _showError('Could not save the submission: $e');
+        final text = e.toString();
+        // Most likely a UNIQUE constraint hit on sheet_row_hash (shouldn't
+        // happen with UUIDs, but surface it readably rather than crashing).
+        // DEBT(Step 2): submissions.sheet_row_hash carries both a column-level
+        // UNIQUE constraint and a separately created unique index; not fixed
+        // here on purpose.
+        if (text.contains('UNIQUE constraint failed')) {
+          _showError('This submission already exists (duplicate row hash).');
+        } else if (text.contains('SqliteException') ||
+            text.contains('database')) {
+          _showError('Database error while saving: $e');
+        } else {
+          _showError('Could not save the submission: $e');
+        }
       }
     }
   }
