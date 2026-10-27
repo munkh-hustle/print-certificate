@@ -8,6 +8,11 @@ import 'package:path_provider/path_provider.dart';
 import 'seeds.dart';
 import 'tables.dart';
 
+// DEBT(Step 2): schemaVersion/onUpgrade and missing FKs are known Step 2 debt;
+// left untouched here on purpose (Step 5 only adds helpers + seeding).
+
+part 'database.g.dart';
+
 /// Stable course id derived from a name: lowercase, whitespace/punctuation →
 /// `_`, Cyrillic kept as-is. Collapsing runs of `_` keeps ids readable and the
 /// trailing trim avoids ids like `barist_`.
@@ -15,11 +20,6 @@ String _courseIdFromName(String name) => name
     .toLowerCase()
     .replaceAll(RegExp(r'[^a-z0-9\u0400-\u04FF]+'), '_')
     .replaceAll(RegExp(r'^_+|_+$'), '');
-
-// DEBT(Step 2): schemaVersion/onUpgrade and missing FKs are known Step 2 debt;
-// left untouched here on purpose (Step 5 only adds helpers + seeding).
-
-part 'database.g.dart';
 
 /// The Disbox local database (Drift / SQLite).
 @DriftDatabase(
@@ -102,6 +102,14 @@ class AppDatabase extends _$AppDatabase {
       ),
     );
   }
+
+  /// Public, idempotent entry point for seeding (Step 5).
+  ///
+  /// Delegates to [_seedCoursesIfEmpty], which no-ops whenever any course row
+  /// exists. Exposed so the Courses page's "Restore defaults" action can seed
+  /// an **existing** DB that was created before Step 5 shipped (its `onCreate`
+  /// already ran and never seeded anything).
+  Future<void> reseedCoursesIfEmpty() => _seedCoursesIfEmpty();
 
   /// Inserts the default course list if the table is empty (idempotent).
   ///

@@ -1,4 +1,7 @@
 import 'dart:convert';
+
+// Color comes from dart:ui (which also exports Offset/Size — files that need
+// Offset/Size alongside material.dart should import painting.dart instead).
 import 'dart:ui' show Color;
 
 /// Step 5 — the JSON model for `Courses.templateConfigJson`.
