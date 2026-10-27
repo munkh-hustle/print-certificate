@@ -1,9 +1,10 @@
 import 'dart:io';
-import 'dart:ui' show Offset, Size;
+
+// Offset/Size via painting.dart, NOT dart:ui — importing dart:ui directly in a
+// file that also imports material.dart makes Color/Offset ambiguous.
+import 'package:flutter/painting.dart' show Offset, Size;
 
 import 'package:file_picker/file_picker.dart';
-// ignore: unnecessary_import — required for the `FilePicker.platform` getter.
-import 'package:file_picker/platform/file_picker.dart';
 import 'package:flutter/foundation.dart' show Uint8List;
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
