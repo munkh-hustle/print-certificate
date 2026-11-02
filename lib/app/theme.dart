@@ -151,6 +151,29 @@ class AppTheme {
           ),
         ),
       ),
+      // ROOT-CAUSE FIX for the render dump where EVERY child of a row showed
+      //   constraints: BoxConstraints(0.0<=w<=Infinity, 0.0<=h<=24.0)
+      //   additionalConstraints: BoxConstraints(0.0<=w<=Infinity, 48.0<=h<=Infinity)
+      // i.e. "RenderConstrainedBox OVERFLOWED by 24.0 pixels" x all children.
+      // That signature is the Material 3 *list tile* tap-target box: every
+      // ListTile-family widget (RadioListTile included) wraps its contents in a
+      // ConstrainedBox whose minimum height comes from
+      // `Material.of(context).tapTargetSize`. With the default
+      // MaterialTapTargetSize.padded that floor is 48dp; when such tiles sit in
+      // a dense row/slot that only offers 24dp of height, each tile's inner
+      // RenderConstrainedBox overflows by exactly 24px - once per child.
+      // Setting shrinkWrap here removes the 48dp floor for ALL list tiles
+      // rendered through this theme at once ("from child 1 to all").
+      // NOTE: ListTileThemeData's valid named parameters only -
+      // `materialTapTargetSize`, `dense`, `minVerticalPadding`. It does NOT
+      // expose `visualDensity` / `tapTargetSize` (those live on ThemeData and
+      // ButtonStyle respectively); passing them here previously produced
+      // `undefined_named_parameter` analyzer errors.
+      listTileTheme: ListTileThemeData(
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        dense: true,
+        minVerticalPadding: 2,
+      ),
       // Same class of bug for chips: an oversized chip layout enforces a
       // 48dp-tall RenderConstrainedBox, which overflows by 24px whenever a
       // chip sits in a 24dp-high slot (dense rows, toolbars, segment lists).
@@ -158,10 +181,9 @@ class AppTheme {
       // `visualDensity` as named parameters (those live on ButtonStyle /
       // styleFrom APIs and on the individual chip widgets). Passing either
       // here produced `undefined_named_parameter` analyzer errors. The
-      // explicit compact `padding`/`labelPadding`/`materialTapTargetSize`-free
-      // sizing below keeps each chip's intrinsic height well under 24dp,
-      // which achieves the same overflow-free result through the knobs that
-      // DO exist on ChipThemeData.
+      // explicit compact `padding`/`labelPadding` sizing below keeps each
+      // chip's intrinsic height well under 24dp, which achieves the same
+      // overflow-free result through the knobs that DO exist on ChipThemeData.
       chipTheme: ChipThemeData(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         labelPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),

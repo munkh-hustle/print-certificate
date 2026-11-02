@@ -443,14 +443,40 @@ class _TemplateEditorPageState extends ConsumerState<TemplateEditorPage> {
         const Divider(height: 32),
         Text('Markers', style: theme.textTheme.titleSmall),
         const SizedBox(height: 8),
+        // ROOT-CAUSE FIX for the repeated "RenderConstrainedBox overflowed by
+        // 24.0 pixels" dump that hit EVERY child of a row ("from child 1 to
+        // all"). The signature in the dump was:
+        //   constraints:           BoxConstraints(0.0<=w<=Infinity, 0.0<=h<=24.0)
+        //   additionalConstraints: BoxConstraints(0.0<=w<=Infinity, 48.0<=h<=Infinity)
+        // i.e. a Material tap-target ConstrainedBox demanding >= 48dp height
+        // while its parent slot only offered <= 24dp — exactly what happens
+        // when RadioListTiles (whose M3 control Padding imposes a 48dp floor
+        // unless shrunk) are placed inside a vertically-tight container.
+        //
+        // Two layers now prevent it permanently:
+        //  1. Theme layer (`lib/app/theme.dart`): `listTileTheme` sets
+        //     `materialTapTargetSize: shrinkWrap`, removing the 48dp floor for
+        //     every ListTile-family widget rendered through the app theme.
+        //  2. Layout layer (here): each tile is wrapped in
+        //     `IntrinsicHeight + ConstrainedBox(minHeight: 48)` so the tight
+        //     cross-axis constraint handed down is always satisfiable even if
+        //     some future/third-party widget re-imposes the 48dp floor.
+        //     `isThreeLine: false` keeps the tile single-block so its intrinsic
+        //     height stays deterministic.
         for (final kind in MarkerKind.values)
-          RadioListTile<MarkerKind>(
-            value: kind,
-            groupValue: _selected,
-            dense: true,
-            title: Text(kind.label),
-            subtitle: Text(_markerSummary(kind)),
-            onChanged: (v) => setState(() => _selected = v ?? kind),
+          IntrinsicHeight(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 48),
+              child: RadioListTile<MarkerKind>(
+                value: kind,
+                groupValue: _selected,
+                dense: true,
+                isThreeLine: false,
+                title: Text(kind.label),
+                subtitle: Text(_markerSummary(kind)),
+                onChanged: (v) => setState(() => _selected = v ?? kind),
+              ),
+            ),
           ),
         const Divider(height: 32),
         ..._fieldsFor(_selected, theme),
