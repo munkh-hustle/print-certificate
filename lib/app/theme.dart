@@ -117,16 +117,33 @@ class AppTheme {
           ),
         ),
       ),
-      // SegmentedButton's internal ActionChip/TextButton children show up in
-      // render dumps as `RenderSemanticsAnnotations > RenderConstrainedBox`
-      // pairs; cap their tap target too so a short toolbar cannot clip them.
+      // SegmentedButtonThemeData.style is a *plain* ButtonStyle (there is no
+      // `.styleFrom` helper). Its `minimumSize`, `maximumSize`, `padding` and
+      // `iconSize` fields require `WidgetStateProperty<...>` values, while
+      // `tapTargetSize` and `visualDensity` are plain nullable enums — mixing
+      // the two up is what produced the previous
+      // `argument_type_not_assignable` analyzer errors here.
+      //
+      // More importantly, wrapping only the tap target was NOT enough to stop
+      // the overflow seen in the debug dump
+      // (`additionalConstraints: BoxConstraints(0.0<=w<=Infinity,
+      // 48.0<=h<=Infinity)` inside a `0.0<=h<=24.0` slot): when the app runs
+      // with a platform/brightness combination that has no dedicated theme
+      // entry, or before this theme is applied, the M3 default still imposes
+      // the 48dp floor. The definitive fix lives at the layout level in
+      // `template_editor_page.dart`: every button-like widget is given LOOSE
+      // height constraints instead of being squeezed into a tight 24dp slot.
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: ButtonStyle(
-          // `tapTargetSize` and `visualDensity` on ButtonStyle are plain
-          // nullable values (not WidgetStateProperty), unlike most other
-          // ButtonStyle properties — pass them directly.
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           visualDensity: VisualDensity.compact,
+          minimumSize: const WidgetStatePropertyAll<Size>(Size.zero),
+          maximumSize: const WidgetStatePropertyAll<Size>(
+            Size(double.infinity, 24),
+          ),
+          padding: const WidgetStatePropertyAll<EdgeInsets>(
+            EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+          ),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(

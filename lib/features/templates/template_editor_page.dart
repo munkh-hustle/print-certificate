@@ -398,14 +398,31 @@ class _TemplateEditorPageState extends ConsumerState<TemplateEditorPage> {
         const Divider(height: 32),
         Text('Paper size', style: theme.textTheme.titleSmall),
         const SizedBox(height: 8),
-        SegmentedButton<TemplatePaperSize>(
-          segments: const [
-            ButtonSegment(value: TemplatePaperSize.a4, label: Text('A4')),
-            ButtonSegment(value: TemplatePaperSize.a5, label: Text('A5')),
-          ],
-          selected: {_config.paperSize},
-          onSelectionChanged: (s) =>
-              setState(() => _config = _config.copyWith(paperSize: s.first)),
+        // ROOT-CAUSE FIX for the RenderConstrainedBox overflow dump:
+        // SegmentedButton lays its segments out in an internal `Row` with
+        // `CrossAxisAlignment.stretch`, which hands every segment a TIGHT
+        // vertical constraint equal to the row's own (small) height. When that
+        // height is driven by a compact text line (~24px), each segment ends up
+        // as `constraints: 0.0<=h<=24.0` wrapping the M3 tap-target box
+        // `additionalConstraints: 48.0<=h<=Infinity` → "RenderConstrainedBox
+        // overflowed by 24 pixels" for EVERY child of the row.
+        //
+        // Constraining the whole button with `BoxConstraints(minHeight: 40)`
+        // makes the row at least as tall as the segments' intrinsic minimum,
+        // so the tight constraint handed down is always satisfiable and the
+        // overflow disappears for all children (this is the part the theme
+        // tweak alone could not guarantee).
+        ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 40),
+          child: SegmentedButton<TemplatePaperSize>(
+            segments: const [
+              ButtonSegment(value: TemplatePaperSize.a4, label: Text('A4')),
+              ButtonSegment(value: TemplatePaperSize.a5, label: Text('A5')),
+            ],
+            selected: {_config.paperSize},
+            onSelectionChanged: (s) =>
+                setState(() => _config = _config.copyWith(paperSize: s.first)),
+          ),
         ),
         const SizedBox(height: 4),
         Text(
