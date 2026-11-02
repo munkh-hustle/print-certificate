@@ -154,13 +154,15 @@ class AppTheme {
       // Same class of bug for chips: an oversized chip layout enforces a
       // 48dp-tall RenderConstrainedBox, which overflows by 24px whenever a
       // chip sits in a 24dp-high slot (dense rows, toolbars, segment lists).
-      // NOTE: `ChipThemeData` has NO `tapTargetSize` parameter (that field only
-      // exists on the individual chip widgets themselves). Passing it here was
-      // an `undefined_named_parameter` analyzer error. The compact padding +
-      // visualDensity below achieve the same effect: no 48dp RenderConstrainedBox
-      // floor is generated inside a 24dp-high slot.
+      // NOTE: `ChipThemeData` exposes NEITHER `tapTargetSize` NOR
+      // `visualDensity` as named parameters (those live on ButtonStyle /
+      // styleFrom APIs and on the individual chip widgets). Passing either
+      // here produced `undefined_named_parameter` analyzer errors. The
+      // explicit compact `padding`/`labelPadding`/`materialTapTargetSize`-free
+      // sizing below keeps each chip's intrinsic height well under 24dp,
+      // which achieves the same overflow-free result through the knobs that
+      // DO exist on ChipThemeData.
       chipTheme: ChipThemeData(
-        visualDensity: VisualDensity.compact,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         labelPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
         side: BorderSide(color: colorScheme.outlineVariant),
