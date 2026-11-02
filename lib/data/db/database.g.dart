@@ -2076,6 +2076,13 @@ class CertificateCounterRow extends DataClass
     implements Insertable<CertificateCounterRow> {
   /// e.g. 2026.
   final int year;
+
+  /// NOT NULL DEFAULT 0. Declared via `.withDefault()` so Drift emits the
+  /// DEFAULT clause in CREATE TABLE. (The previous workaround � rewriting
+  /// sqlite_master with an UPDATE statement inside onCreate � is illegal in
+  /// SQLite: "table sqlite_master may not be modified".) Callers using the
+  /// default companion with `Value<int>` fields (see nextCertificateId) are
+  /// unaffected by this change.
   final int lastSeq;
   const CertificateCounterRow({required this.year, required this.lastSeq});
   @override

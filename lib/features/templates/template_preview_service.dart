@@ -192,7 +192,7 @@ Future<TemplatePreview> loadTemplatePreview(
   List<PdfRaster> rasters;
   try {
     rasters = await Printing.raster(bytes,
-        pages: const [0], dpi: kPreviewPixelDpi.toInt()).toList();
+        pages: const [0], dpi: kPreviewPixelDpi.toDouble()).toList();
   } catch (e) {
     throw TemplateLoadException('Could not render the PDF template:\n$e');
   }
@@ -245,6 +245,6 @@ Future<Uint8List> renderBlankPage({
   );
   final bytes = await doc.save();
   final rasters = await Printing.raster(bytes,
-      pages: const [0], dpi: kPreviewPixelDpi.toInt()).toList();
+      pages: const [0], dpi: kPreviewPixelDpi.toDouble()).toList();
   return rasters.first.toPng();
 }
