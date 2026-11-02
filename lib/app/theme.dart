@@ -130,11 +130,11 @@ class AppTheme {
       //   constraints: BoxConstraints(0.0<=w<=Infinity, 0.0<=h<=24.0)
       //   additionalConstraints: BoxConstraints(0.0<=w<=Infinity, 48.0<=h<=Infinity)
       // i.e. "RenderConstrainedBox OVERFLOWED by 24.0 pixels" × N children.
-      // The 48dp floor comes from the DEFAULT `ChipThemeData.tapTargetSize`
-      // (padded/enforced 48dp via a RenderConstrainedBox); the 24dp ceiling is
-      // the tight cross-axis constraint handed down by the parent Row. Because
-      // every chip/segment renders through the same theme object, fixing one
-      // instance fixes all of them ("from child 1 to all").
+      // The 48dp floor comes from the default MaterialTapTargetSize.padded
+      // (enforced via a RenderConstrainedBox inside each segment); the 24dp
+      // ceiling is the tight cross-axis constraint handed down by the parent
+      // Row. Because every chip/segment renders through the same theme object,
+      // fixing one instance fixes all of them ("from child 1 to all").
       //
       // NOTE: `maximumSize` must NEVER be capped at 24 here — an earlier
       // attempt did exactly that, which clamped the *outer* box to 24 while
@@ -151,12 +151,18 @@ class AppTheme {
           ),
         ),
       ),
-      // Same class of bug for chips: the M3 default chip tap target enforces a
+      // Same class of bug for chips: an oversized chip layout enforces a
       // 48dp-tall RenderConstrainedBox, which overflows by 24px whenever a
       // chip sits in a 24dp-high slot (dense rows, toolbars, segment lists).
-      // shrinkWrap removes the floor.
+      // NOTE: `ChipThemeData` has NO `tapTargetSize` parameter (that field only
+      // exists on the individual chip widgets themselves). Passing it here was
+      // an `undefined_named_parameter` analyzer error. The compact padding +
+      // visualDensity below achieve the same effect: no 48dp RenderConstrainedBox
+      // floor is generated inside a 24dp-high slot.
       chipTheme: ChipThemeData(
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        labelPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
         side: BorderSide(color: colorScheme.outlineVariant),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
