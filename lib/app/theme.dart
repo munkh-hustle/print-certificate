@@ -162,17 +162,27 @@ class AppTheme {
       // MaterialTapTargetSize.padded that floor is 48dp; when such tiles sit in
       // a dense row/slot that only offers 24dp of height, each tile's inner
       // RenderConstrainedBox overflows by exactly 24px - once per child.
-      // Setting shrinkWrap here removes the 48dp floor for ALL list tiles
-      // rendered through this theme at once ("from child 1 to all").
-      // NOTE: ListTileThemeData's valid named parameters only -
-      // `materialTapTargetSize`, `dense`, `minVerticalPadding`. It does NOT
-      // expose `visualDensity` / `tapTargetSize` (those live on ThemeData and
-      // ButtonStyle respectively); passing them here previously produced
-      // `undefined_named_parameter` analyzer errors.
+      // API FACT CHECK: `ListTileThemeData` does NOT expose a
+      // `materialTapTargetSize` named parameter (an earlier attempt passed it
+      // and the analyzer correctly reported `undefined_named_parameter`).
+      // The tile's tap-target floor is imposed by the surrounding Material,
+      // not the tile theme -- so it cannot be removed from here.
+      // What ListTileThemeData CAN do is shrink the tile's own intrinsic
+      // height: `dense: true` (smaller title/subtitle fonts + icon sizing),
+      // zero `minVerticalPadding`, and compact `tilePadding`. The page-level
+      // fix then wraps every tile in `ConstrainedBox(minHeight: 48)` (with NO
+      // IntrinsicHeight above it -- IntrinsicHeight was itself handing down
+      // the tight `h=24.0` slot seen in the dump), so each tile's Material
+      // is always >= 48dp tall and its internal tap-target box can never
+      // overflow. That combination fixes ALL tiles at once
+      // ("from child 1 to all").
       listTileTheme: ListTileThemeData(
-        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
         dense: true,
-        minVerticalPadding: 2,
+        style: ListTileStyle.list,
+        iconColor: colorScheme.onSurfaceVariant,
+        textColor: colorScheme.onSurface,
+        minVerticalPadding: 0,
+        tilePadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
       ),
       // Same class of bug for chips: an oversized chip layout enforces a
       // 48dp-tall RenderConstrainedBox, which overflows by 24px whenever a

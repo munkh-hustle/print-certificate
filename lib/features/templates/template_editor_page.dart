@@ -415,23 +415,27 @@ class _TemplateEditorPageState extends ConsumerState<TemplateEditorPage> {
         //     capped `maximumSize.height` at 24, which *reproduced* the exact
         //     same conflict (outer box forced ≤24 vs inner box forcing ≥48);
         //     that cap has been removed.
-        //  2. Layout layer (here): `IntrinsicHeight` + `ConstrainedBox(minHeight: 48)`
-        //     guarantees the row is at least as tall as the tallest possible
-        //     segment tap target, so even if some third-party or future widget
-        //     re-imposes the 48dp floor, the tight constraint handed down is
-        //     always satisfiable and no child can overflow.
-        IntrinsicHeight(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 48),
-            child: SegmentedButton<TemplatePaperSize>(
-              segments: const [
-                ButtonSegment(value: TemplatePaperSize.a4, label: Text('A4')),
-                ButtonSegment(value: TemplatePaperSize.a5, label: Text('A5')),
-              ],
-              selected: {_config.paperSize},
-              onSelectionChanged: (s) => setState(
-                  () => _config = _config.copyWith(paperSize: s.first)),
-            ),
+        //  2. Layout layer (here): `ConstrainedBox(minHeight: 48)` guarantees
+        //     the row is at least as tall as the tallest possible segment tap
+        //     target, so even if some third-party or future widget re-imposes
+        //     the 48dp floor, the tight constraint handed down is always
+        //     satisfiable and no child can overflow.
+        //     NOTE: the previous `IntrinsicHeight` wrapper was removed — it
+        //     sizes its child to the child's *intrinsic* height (~24dp of
+        //     text) and passes that down as a TIGHT vertical constraint,
+        //     overriding the minHeight below it. That is exactly what produced
+        //     the `0.0<=h<=24.0` vs `48.0<=h<=Infinity` conflict seen in the
+        //     render dump for EVERY child of the segment row.
+        ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: SegmentedButton<TemplatePaperSize>(
+            segments: const [
+              ButtonSegment(value: TemplatePaperSize.a4, label: Text('A4')),
+              ButtonSegment(value: TemplatePaperSize.a5, label: Text('A5')),
+            ],
+            selected: {_config.paperSize},
+            onSelectionChanged: (s) => setState(
+                () => _config = _config.copyWith(paperSize: s.first)),
           ),
         ),
         const SizedBox(height: 4),
@@ -454,28 +458,36 @@ class _TemplateEditorPageState extends ConsumerState<TemplateEditorPage> {
         // unless shrunk) are placed inside a vertically-tight container.
         //
         // Two layers now prevent it permanently:
-        //  1. Theme layer (`lib/app/theme.dart`): `listTileTheme` sets
-        //     `materialTapTargetSize: shrinkWrap`, removing the 48dp floor for
-        //     every ListTile-family widget rendered through the app theme.
-        //  2. Layout layer (here): each tile is wrapped in
-        //     `IntrinsicHeight + ConstrainedBox(minHeight: 48)` so the tight
-        //     cross-axis constraint handed down is always satisfiable even if
-        //     some future/third-party widget re-imposes the 48dp floor.
-        //     `isThreeLine: false` keeps the tile single-block so its intrinsic
-        //     height stays deterministic.
+        //  1. API FACT CHECK: `ListTileThemeData` has NO `materialTapTargetSize`
+        //     named parameter (the analyzer rejects it with
+        //     `undefined_named_parameter`) — the 48dp tap-target floor comes
+        //     from the surrounding Material and cannot be removed via the tile
+        //     theme. The theme instead makes tiles intrinsically compact
+        //     (`dense`, zero `minVerticalPadding`, tight `tilePadding`).
+        //  2. Layout layer (here): each tile is wrapped *directly* in
+        //     `ConstrainedBox(minHeight: 48)`. That forces the tile's own
+        //     Material to be >= 48dp tall, so the internal tap-target
+        //     RenderConstrainedBox (0<=h<=tileHeight vs additionalConstraints
+        //     48<=h<=Infinity) can NEVER overflow — the ceiling always meets
+        //     the floor. This fixes EVERY tile in the list at once.
+        //     NOTE: the previous `IntrinsicHeight` wrapper was actively
+        //     harmful here: IntrinsicHeight sizes its child to the child's
+        //     *intrinsic* height (~24dp of text for a dense tile) and hands
+        //     that down as a TIGHT constraint, overriding the minHeight below
+        //     it — which is exactly the `0.0<=h<=24.0` slot seen in the dump.
+        //     It has been removed. `isThreeLine: false` keeps the tile
+        //     single-block so its height stays deterministic.
         for (final kind in MarkerKind.values)
-          IntrinsicHeight(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 48),
-              child: RadioListTile<MarkerKind>(
-                value: kind,
-                groupValue: _selected,
-                dense: true,
-                isThreeLine: false,
-                title: Text(kind.label),
-                subtitle: Text(_markerSummary(kind)),
-                onChanged: (v) => setState(() => _selected = v ?? kind),
-              ),
+          ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: RadioListTile<MarkerKind>(
+              value: kind,
+              groupValue: _selected,
+              dense: true,
+              isThreeLine: false,
+              title: Text(kind.label),
+              subtitle: Text(_markerSummary(kind)),
+              onChanged: (v) => setState(() => _selected = v ?? kind),
             ),
           ),
         const Divider(height: 32),
