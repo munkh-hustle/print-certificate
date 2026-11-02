@@ -122,12 +122,11 @@ class AppTheme {
       // pairs; cap their tap target too so a short toolbar cannot clip them.
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: ButtonStyle(
-          tapTargetSize: WidgetStatePropertyAll<MaterialTapTargetSize>(
-            MaterialTapTargetSize.shrinkWrap,
-          ),
-          visualDensity: WidgetStatePropertyAll<VisualDensity>(
-            VisualDensity.compact,
-          ),
+          // `tapTargetSize` and `visualDensity` on ButtonStyle are plain
+          // nullable values (not WidgetStateProperty), unlike most other
+          // ButtonStyle properties — pass them directly.
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          visualDensity: VisualDensity.compact,
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
