@@ -398,7 +398,8 @@ class _TemplateEditorPageState extends ConsumerState<TemplateEditorPage> {
         const Divider(height: 32),
         Text('Paper size', style: theme.textTheme.titleSmall),
         const SizedBox(height: 8),
-        // ROOT-CAUSE FIX for the RenderConstrainedBox overflow dump:
+        // ROOT-CAUSE FIX for the RenderConstrainedBox overflow dump that hit
+        // EVERY child of the segment row ("from child 1 to all"):
         // SegmentedButton lays its segments out in an internal `Row` with
         // `CrossAxisAlignment.stretch`, which hands every segment a TIGHT
         // vertical constraint equal to the row's own (small) height. When that
@@ -407,21 +408,30 @@ class _TemplateEditorPageState extends ConsumerState<TemplateEditorPage> {
         // `additionalConstraints: 48.0<=h<=Infinity` → "RenderConstrainedBox
         // overflowed by 24 pixels" for EVERY child of the row.
         //
-        // Constraining the whole button with `BoxConstraints(minHeight: 40)`
-        // makes the row at least as tall as the segments' intrinsic minimum,
-        // so the tight constraint handed down is always satisfiable and the
-        // overflow disappears for all children (this is the part the theme
-        // tweak alone could not guarantee).
-        ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 40),
-          child: SegmentedButton<TemplatePaperSize>(
-            segments: const [
-              ButtonSegment(value: TemplatePaperSize.a4, label: Text('A4')),
-              ButtonSegment(value: TemplatePaperSize.a5, label: Text('A5')),
-            ],
-            selected: {_config.paperSize},
-            onSelectionChanged: (s) =>
-                setState(() => _config = _config.copyWith(paperSize: s.first)),
+        // Two complementary layers now kill this permanently:
+        //  1. Theme layer (`lib/app/theme.dart`): segmented/chip themes use
+        //     `MaterialTapTargetSize.shrinkWrap`, so no widget rendered through
+        //     the theme still demands the 48dp floor. The earlier attempt also
+        //     capped `maximumSize.height` at 24, which *reproduced* the exact
+        //     same conflict (outer box forced ≤24 vs inner box forcing ≥48);
+        //     that cap has been removed.
+        //  2. Layout layer (here): `IntrinsicHeight` + `ConstrainedBox(minHeight: 48)`
+        //     guarantees the row is at least as tall as the tallest possible
+        //     segment tap target, so even if some third-party or future widget
+        //     re-imposes the 48dp floor, the tight constraint handed down is
+        //     always satisfiable and no child can overflow.
+        IntrinsicHeight(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: SegmentedButton<TemplatePaperSize>(
+              segments: const [
+                ButtonSegment(value: TemplatePaperSize.a4, label: Text('A4')),
+                ButtonSegment(value: TemplatePaperSize.a5, label: Text('A5')),
+              ],
+              selected: {_config.paperSize},
+              onSelectionChanged: (s) => setState(
+                  () => _config = _config.copyWith(paperSize: s.first)),
+            ),
           ),
         ),
         const SizedBox(height: 4),

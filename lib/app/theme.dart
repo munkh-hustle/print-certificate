@@ -124,26 +124,53 @@ class AppTheme {
       // the two up is what produced the previous
       // `argument_type_not_assignable` analyzer errors here.
       //
-      // More importantly, wrapping only the tap target was NOT enough to stop
-      // the overflow seen in the debug dump
-      // (`additionalConstraints: BoxConstraints(0.0<=w<=Infinity,
-      // 48.0<=h<=Infinity)` inside a `0.0<=h<=24.0` slot): when the app runs
-      // with a platform/brightness combination that has no dedicated theme
-      // entry, or before this theme is applied, the M3 default still imposes
-      // the 48dp floor. The definitive fix lives at the layout level in
-      // `template_editor_page.dart`: every button-like widget is given LOOSE
-      // height constraints instead of being squeezed into a tight 24dp slot.
+      // ROOT-CAUSE FIX for the render-tree dump that repeated the same
+      // signature on EVERY child of the segment row
+      // (children 1..54 in the debug output):
+      //   constraints: BoxConstraints(0.0<=w<=Infinity, 0.0<=h<=24.0)
+      //   additionalConstraints: BoxConstraints(0.0<=w<=Infinity, 48.0<=h<=Infinity)
+      // i.e. "RenderConstrainedBox OVERFLOWED by 24.0 pixels" × N children.
+      // The 48dp floor comes from the DEFAULT `ChipThemeData.tapTargetSize`
+      // (padded/enforced 48dp via a RenderConstrainedBox); the 24dp ceiling is
+      // the tight cross-axis constraint handed down by the parent Row. Because
+      // every chip/segment renders through the same theme object, fixing one
+      // instance fixes all of them ("from child 1 to all").
+      //
+      // NOTE: `maximumSize` must NEVER be capped at 24 here — an earlier
+      // attempt did exactly that, which clamped the *outer* box to 24 while
+      // the inner tap-target ConstrainedBox still demanded >= 48, reproducing
+      // the very overflow it was supposed to prevent. Keep the max generous
+      // (>= 48) and let `shrinkWrap` + compact density do the shrinking.
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: ButtonStyle(
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           visualDensity: VisualDensity.compact,
-          minimumSize: const WidgetStatePropertyAll<Size>(Size.zero),
-          maximumSize: const WidgetStatePropertyAll<Size>(
-            Size(double.infinity, 24),
-          ),
+          minimumSize: const WidgetStatePropertyAll<Size>(Size(0, 24)),
           padding: const WidgetStatePropertyAll<EdgeInsets>(
             EdgeInsets.symmetric(horizontal: 12, vertical: 2),
           ),
+        ),
+      ),
+      // Same class of bug for chips: the M3 default chip tap target enforces a
+      // 48dp-tall RenderConstrainedBox, which overflows by 24px whenever a
+      // chip sits in a 24dp-high slot (dense rows, toolbars, segment lists).
+      // shrinkWrap removes the floor.
+      chipTheme: ChipThemeData(
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        side: BorderSide(color: colorScheme.outlineVariant),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+      // Belt-and-braces coverage for the remaining button themes so the same
+      // "RenderConstrainedBox 0<=h<=24 vs additionalConstraints 48<=h<=Infinity"
+      // signature can never reappear from any themed button variant placed in
+      // a height-limited slot ("from child 1 to all" in the render dump):
+      // outlined / elevated / filled already override above; these complete
+      // the set.
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
