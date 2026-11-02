@@ -270,18 +270,20 @@ class _TemplateEditorPageState extends ConsumerState<TemplateEditorPage> {
       appBar: AppBar(
         title: Text('Template · ${course.name}'),
         actions: [
+          // The AppBar action slot is vertically constrained (the toolbar hands
+          // its children a maxHeight of ~24–32dp). Wrapping the button in an
+          // Align used to let it expand to the full cross-axis extent and the
+          // Material button's internal 48dp tap-target ConstrainedBox then
+          // overflowed by exactly that difference. `Center` + the theme-level
+          // `tapTargetSize: shrinkWrap` / `minimumSize` overrides keep the
+          // button inside the available height.
           Padding(
             padding: const EdgeInsets.only(right: 12),
-            child: FilledButton.icon(
-              onPressed: _saving ? null : _save,
-              icon: _saving
-                  ? const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.save_outlined),
-              label: Text(_saving ? 'Saving…' : 'Save'),
+            child: Center(
+              child: _SaveButton(
+                saving: _saving,
+                onPressed: _saving ? null : _save,
+              ),
             ),
           ),
         ],
@@ -384,8 +386,9 @@ class _TemplateEditorPageState extends ConsumerState<TemplateEditorPage> {
           overflow: TextOverflow.ellipsis,
         ),
         const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerLeft,
+        // `Center` (not `Align`) so the button is laid out with loose vertical
+        // constraints and cannot stretch into a height-limited slot.
+        Center(
           child: OutlinedButton.icon(
             onPressed: _pickTemplateFile,
             icon: const Icon(Icons.folder_open),
@@ -427,6 +430,11 @@ class _TemplateEditorPageState extends ConsumerState<TemplateEditorPage> {
         const Divider(height: 32),
         Align(
           alignment: Alignment.centerLeft,
+          // `heightFactor: 1` keeps the vertical constraints loose so the
+          // button never gets squeezed into a slot shorter than its own tap
+          // target (the RenderConstrainedBox / RenderPositionedBox overflow
+          // pattern seen in the debug dump).
+          heightFactor: 1,
           child: TextButton.icon(
             onPressed: () => setState(() => _config = TemplateConfig.initial),
             icon: const Icon(Icons.restart_alt),
@@ -591,6 +599,34 @@ class _TemplateEditorPageState extends ConsumerState<TemplateEditorPage> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Compact "Save" button for the template editor's AppBar action slot.
+///
+/// Kept as its own widget so the height-safe configuration (shrink-wrapped tap
+/// target + explicit `minimumSize`) lives in one place. Without it the button
+/// inherits Material's 48dp minimum tap-target height while the AppBar only
+/// gives it ~24dp, which renders as a yellow/black overflow stripe on Windows.
+class _SaveButton extends StatelessWidget {
+  const _SaveButton({required this.saving, required this.onPressed});
+
+  final bool saving;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton.icon(
+      onPressed: onPressed,
+      icon: saving
+          ? const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.save_outlined),
+      label: Text(saving ? 'Saving…' : 'Save'),
     );
   }
 }

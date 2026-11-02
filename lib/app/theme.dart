@@ -56,11 +56,77 @@ class AppTheme {
           side: BorderSide(color: colorScheme.outlineVariant),
         ),
       ),
-      filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      // NOTE: these button themes must keep `tapTargetSize: shrinkWrap` and an
+      // explicit `minimumSize`. The M3 defaults impose a 48dp-tall min through
+      // MaterialTapTargetSize (a RenderConstrainedBox with
+      // `minHeight: 48.0`) *inside* the button, while a tight vertical
+      // constraint (maxHeight: 24) is handed to the child by the parent Row /
+      // Align. That combination produces the classic overflow signature:
+      //   constraints: BoxConstraints(0.0<=w<=Infinity, 0.0<=h<=24.0)
+      //   additionalConstraints: BoxConstraints(0.0<=w<=Infinity, 48.0<=h<=Infinity)
+      // i.e. "RenderConstrainedBox ... 24.0 pixels overflowing".
+      // Overriding both knobs here makes the bug impossible to reintroduce for
+      // any button placed in a height-limited slot (AppBar actions, table row
+      // actions, dense toolbars).
+      //
+      // `minimumSize` stays at 0 width so buttons remain right-sized; only the
+      // hard 48dp floor is removed. TextButton additionally gets a 24dp floor
+      // because it is used inside AppBar actions and dialog actions where the
+      // available height can be as small as 24dp.
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          minimumSize: const Size(0, 24),
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          minimumSize: const Size(0, 24),
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          minimumSize: const Size(0, 24),
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          minimumSize: const Size(0, 24),
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      ),
+      // SegmentedButton's internal ActionChip/TextButton children show up in
+      // render dumps as `RenderSemanticsAnnotations > RenderConstrainedBox`
+      // pairs; cap their tap target too so a short toolbar cannot clip them.
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          tapTargetSize: WidgetStatePropertyAll<MaterialTapTargetSize>(
+            MaterialTapTargetSize.shrinkWrap,
+          ),
+          visualDensity: WidgetStatePropertyAll<VisualDensity>(
+            VisualDensity.compact,
           ),
         ),
       ),
