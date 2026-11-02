@@ -168,8 +168,11 @@ class AppTheme {
       // The tile's tap-target floor is imposed by the surrounding Material,
       // not the tile theme -- so it cannot be removed from here.
       // What ListTileThemeData CAN do is shrink the tile's own intrinsic
-      // height: `dense: true` (smaller title/subtitle fonts + icon sizing),
-      // zero `minVerticalPadding`, and compact `tilePadding`. The page-level
+      // height: `dense: true` (smaller title/subtitle fonts + icon sizing)
+      // and zero `minVerticalPadding`. (API FACT CHECK #2: the horizontal
+      // content inset parameter on ListTileThemeData is named `padding`,
+      // NOT `tilePadding` -- `tilePadding` produced an
+      // `undefined_named_parameter` analyzer error.) The page-level
       // fix then wraps every tile in `ConstrainedBox(minHeight: 48)` (with NO
       // IntrinsicHeight above it -- IntrinsicHeight was itself handing down
       // the tight `h=24.0` slot seen in the dump), so each tile's Material
@@ -182,7 +185,7 @@ class AppTheme {
         iconColor: colorScheme.onSurfaceVariant,
         textColor: colorScheme.onSurface,
         minVerticalPadding: 0,
-        tilePadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
       ),
       // Same class of bug for chips: an oversized chip layout enforces a
       // 48dp-tall RenderConstrainedBox, which overflows by 24px whenever a
