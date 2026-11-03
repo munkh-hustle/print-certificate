@@ -1,7 +1,15 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+// `Course` no longer referenced here (its old provider moved to
+// courses_provider.dart in Step 5); `Submission` still comes transitively
+// from database.dart.
 import '../data/db/database.dart';
 import 'db_provider.dart';
+
+// Re-export so existing consumers (submissions_page.dart,
+// add_submission_dialog.dart) keep resolving `coursesListProvider` through
+// this import path — the canonical definition lives in courses_provider.dart.
+export 'courses_provider.dart' show coursesListProvider;
 
 /// Streams all submissions (newest first) straight from Drift.
 ///
@@ -16,12 +24,7 @@ final submissionsListProvider = StreamProvider<List<Submission>>((ref) async* {
   yield* db.watchSubmissions();
 });
 
-/// The courses table as a plain list, for the "Add submission" dropdown.
-///
-/// Loaded once per provider lifetime (`get()`, not `watch()`): the Courses
-/// table is managed in later steps (Templates, Step 6), so live updates here
-/// are not required yet.
-final coursesListProvider = FutureProvider<List<Course>>((ref) async {
-  final db = await ref.watch(appDatabaseProvider.future);
-  return db.select(db.courses).get();
-});
+// DEBT(Step 2) note: the old one-shot `coursesListProvider` that used to live
+// here was removed in Step 5 — it collided with the canonical streaming
+// `coursesListProvider` in `courses_provider.dart` (ambiguous_import). All
+// consumers now import that single provider instead.

@@ -14,6 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../data/db/database.dart';
+import '../../providers/courses_provider.dart';
 import '../../providers/db_provider.dart';
 import '../../providers/submissions_provider.dart';
 import '../../services/certificate_id_service.dart';
